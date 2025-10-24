@@ -1,1 +1,2 @@
-# Brevi
+# Brevi - AI Highliter 
+
