@@ -60,6 +60,32 @@ async def upload_video(file: uploadeFile - file(...)):
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSION:
         raise HTTPException(
-            status_code = 400,
+            status_code = 500,
             detail=f"Invaild file type please use allowed types {', '.join(ALLOWED_EXTENSION)}"
         )
+
+    video_id = uuid.uuid4()
+    storage_path = f"videos/{video_id}{file_ext}"
+    
+    try:
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE: ## reading file content
+            raise HTTPException(
+                status_code= 400,
+                detail = f"File too large the Maxium size for a file is {MAX_FILE / (1024*1024)}MB"
+            )
+        supabase.storage.from_("videos").upload( ## uploading storage ainto supabase (temp)
+            path = storage_path,
+            file = file_content,
+            file_options = {"content-type": file.content_type}
+    )
+        data = { ## database record
+            "id": str(video_id),
+            "filename": file.filename,
+            "storage_path": storage_path,
+            "file_size": len(file_content)
+    }
+ 
+        supabase.table("videos").insert(data).execute()
+    except Exception as e:
+        raise HTTPException(status_code = 500, detail = f"Upload failed: {str(e)}")
