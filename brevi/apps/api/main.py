@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
@@ -89,3 +89,12 @@ async def upload_video(file: uploadeFile - file(...)):
         supabase.table("videos").insert(data).execute()
     except Exception as e:
         raise HTTPException(status_code = 500, detail = f"Upload failed: {str(e)}")
+
+@app.get("/api/video/{video_id}" , tags = ["video"])
+def get_video(video_id:str): 
+    try:
+        reponse = supabase.table("videos").select("*").eq("id", video_id).execute()
+        if not reponse.data:
+            raise HTTPException(status_code= 404, detail="Video not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
