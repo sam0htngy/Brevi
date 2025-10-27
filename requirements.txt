@@ -4,3 +4,4 @@ pydantic
 requests
 supabase
 python-multipart
+python-dotenv
