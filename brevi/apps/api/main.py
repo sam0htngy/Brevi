@@ -56,7 +56,7 @@ def meta_data(request: VideoRequest):
         raise HTTPException(status_code = 500, detail = f"Database error: {str(e)}")
 
 @app.post("/api/video/upload", tags = ["video"])
-async def upload_video(file: uploadeFile - file(...)):
+async def upload_video(file: UploadFile = File(...)):
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSION:
         raise HTTPException(
