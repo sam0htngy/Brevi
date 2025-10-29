@@ -5,3 +5,4 @@ requests
 supabase
 python-multipart
 python-dotenv
+pyjwt[crypto]
