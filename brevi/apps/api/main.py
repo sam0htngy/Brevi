@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
 import os
+from auth import get_current_user, get_user_id
 
 
 from supabase import create_client, Client
@@ -35,6 +36,7 @@ def root():
 
 @app.post("/api/video/metadata", tags = ["video"])
 def meta_data(request: VideoRequest):
+    user_id = get_user_id(user)
     new_uuid = uuid.uuid4()
     file_ext = request.filename.split(".")[-1].lower()
     storage_path = f"videos/{new_uuid}.{file_ext}"
@@ -43,14 +45,16 @@ def meta_data(request: VideoRequest):
         "id": new_uuid,
         "filename": request.filename,
         "storage_path": storage_path,
-        "status": "pending"
+        "status": "pending",
+        "user_id": user_id
     }
     try:
         supabase.table("videos").insert(data).execute()
         return { 
             "id": str(new_uuid), 
             "storage_path": storage_path,
-            "status": "pending"
+            "status": "pending",
+            "user_id": user_id
     }
     except Exception as e:
         raise HTTPException(status_code = 500, detail = f"Database error: {str(e)}")
