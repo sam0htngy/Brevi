@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uuid
@@ -35,7 +35,7 @@ def root():
     return {"Status": "Good"}
 
 @app.post("/api/video/metadata", tags = ["video"])
-def meta_data(request: VideoRequest):
+def meta_data(request: VideoRequest, user: dict = Depends(get_current_user)):
     user_id = get_user_id(user)
     new_uuid = uuid.uuid4()
     file_ext = request.filename.split(".")[-1].lower()
@@ -60,7 +60,10 @@ def meta_data(request: VideoRequest):
         raise HTTPException(status_code = 500, detail = f"Database error: {str(e)}")
 
 @app.post("/api/video/upload", tags = ["video"])
-async def upload_video(file: UploadFile = File(...)):
+async def upload_video(file: UploadFile = File(...),user: dict = Depends(get_current_user)):
+    user_id = get_user_id(user)
+
+    
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in ALLOWED_EXTENSION:
         raise HTTPException(
@@ -91,14 +94,39 @@ async def upload_video(file: UploadFile = File(...)):
     }
  
         supabase.table("videos").insert(data).execute()
+        
+        return{
+            "id": str(video_id),
+            "filename": file.filename,
+            "storage_path": storage_path,
+            "status": "success",
+            "user_id": user_id
+        }
+        
     except Exception as e:
         raise HTTPException(status_code = 500, detail = f"Upload failed: {str(e)}")
 
 @app.get("/api/video/{video_id}" , tags = ["video"])
-def get_video(video_id:str): 
+def get_video(video_id:str, user: dict Depends(get_current_user)):
+    user_id = get_user_id(user) 
     try:
         reponse = supabase.table("videos").select("*").eq("id", video_id).execute()
         if not reponse.data:
             raise HTTPException(status_code= 404, detail="Video not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+@app.get("/api/video/user/{user_id}", tags= ["video"])
+def get_user_videos(user_id: str, user: dict = Depends(get_current_user)):
+    authenticated_user_id = get_user_id(user)
+    if authenticated_user_id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied: You can only acess your own video. ")
+    try:
+        response = supabase.table("videos").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        return{
+            "user_id": user_id,
+            "videos": response.data,
+            "count": len(response.data)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
