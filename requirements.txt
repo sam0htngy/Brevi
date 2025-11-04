@@ -1,2 +1,8 @@
 fastapi
 uvicorn[standard]
+pydantic
+requests
+supabase
+python-multipart
+python-dotenv
+pyjwt[crypto]
