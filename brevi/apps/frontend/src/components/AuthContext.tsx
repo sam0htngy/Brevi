@@ -9,22 +9,27 @@ interface AuthContextType{
     signOut: () => Promise<void>
 
 }
-<<<<<<< HEAD
-const AurthContext = createContext<AuthContextType | undefined>(undefined)
 
-export const AuthProvider: React.FC<{children: React.ReactNode}> = ({children}) => {
-    const [user, setUser] = useState<User | null>(null)
-    const [session, setSession] = useState<Session| null>(null)
-    const [loeading, setLoading] = useState(true)
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-    useEffect(() =>{
-        supabase.auth.getSession().then(({data: {session} }) => {
-            setSession(session)
-            setUser(session?.user ?? null)
-            setLoading(false)
-        
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+      setLoading(false)
     })
-    
-    }
-=======
->>>>>>> main
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
