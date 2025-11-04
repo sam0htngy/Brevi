@@ -9,6 +9,7 @@ interface AuthContextType{
     signOut: () => Promise<void>
 
 }
+<<<<<<< HEAD
 const AurthContext = createContext<AuthContextType | undefined>(undefined)
 
 export const AuthProvider: React.FC<{children: React.ReactNode}> = ({children}) => {
@@ -25,3 +26,5 @@ export const AuthProvider: React.FC<{children: React.ReactNode}> = ({children}) 
     })
     
     }
+=======
+>>>>>>> main
