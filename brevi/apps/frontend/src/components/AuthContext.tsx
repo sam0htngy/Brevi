@@ -1,6 +1,7 @@
-import React, {createContext, useContext, useEffect, useState} from 'react'
+import React, {Children, createContext, useContext, useEffect, useState} from 'react'
 import {User, Session} from '@supabase/supabase-js'
 import { supabase } from '../services/supabase'
+import { error } from 'console'
 interface AuthContextType{
     user: User | null
     session: Session | null
@@ -36,4 +37,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe() },[])
 
     
+
+const signInWithGoogle = async () => {
+    const {error} = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: '${window.location.origin}/auth/callback',
+        },
+    })
+    if (error) throw error
+}
+
+const signOut = async () => {
+    const {error} = await supabase.auth.signOut()
+    if (error) throw error
+}
+
+return(
+    <AuthContext.Provider value={{user, session, loading, signInWithGoogle, signOut}}>
+        {children}
+    </AuthContext.Provider>
+)
 }
