@@ -107,7 +107,7 @@ async def upload_video(file: UploadFile = File(...),user: dict = Depends(get_cur
         raise HTTPException(status_code = 500, detail = f"Upload failed: {str(e)}")
 
 @app.get("/api/video/{video_id}" , tags = ["video"])
-def get_video(video_id:str, user: dict Depends(get_current_user)):
+def get_video (video_id:str, user: dict = Depends(get_current_user)):
     user_id = get_user_id(user) 
     try:
         reponse = supabase.table("videos").select("*").eq("id", video_id).execute()
