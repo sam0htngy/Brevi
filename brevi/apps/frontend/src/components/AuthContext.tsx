@@ -59,3 +59,10 @@ return(
     </AuthContext.Provider>
 )
 }
+export const useAuth = () => {
+    const context =useContext(AuthContext)
+    if (context === undefined){
+        throw new Error('useAuth must be used with in an Auth Provider')
+    }
+    return context
+}
