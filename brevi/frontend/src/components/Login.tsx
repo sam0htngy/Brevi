@@ -1,7 +1,9 @@
 import React from 'react'
-import { useAuth } from '../components/AuthContext'
-
+import { useAuth } from './AuthContext'
+import '../styling/Login.css'
 const Login: React.FC = () => {
+
+
     const {signInWithGoogle} = useAuth()
     const handleGoogleSignIn = async () => {
         try {
@@ -19,7 +21,13 @@ const Login: React.FC = () => {
             justifyContent: 'center',
             minHeight: '100vh',
             padding: '20px'
-        }}></div>
+        }}>
+        <h1 className= "font-sans font-bold">Brevi</h1>
+
+
+        </div>
         
     )
+    
 }
+export default Login

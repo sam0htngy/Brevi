@@ -113,6 +113,7 @@ def get_video (video_id:str, user: dict = Depends(get_current_user)):
         reponse = supabase.table("videos").select("*").eq("id", video_id).execute()
         if not reponse.data:
             raise HTTPException(status_code= 404, detail="Video not found")
+        return reponse.data[0]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
