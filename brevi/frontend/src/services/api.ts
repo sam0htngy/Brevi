@@ -27,3 +27,20 @@ export const uploadVIdeoMetadata = async (filename:string) => {
     }
     return response.json()
 }
+export const getUserVideos = async () => {
+    const headers = await getAuthHeaders()
+    const {data: { user }} = await supabase.auth.getUser()
+
+    if (!user) {
+        throw new Error('Not authenicated')
+    }
+    const response = await fetch(`$(API_URL)/api/vidoe/user$(user.id)`, {
+        method: 'GET',
+        headers,
+    })
+
+    if (!response.ok){
+        throw new Error('Failed to get videos')
+    }
+    return response.json()
+}
