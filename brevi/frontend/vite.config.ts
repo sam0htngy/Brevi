@@ -5,3 +5,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
 })
+declare namespace NodeJS{
+  interface ProcessEnv{
+    API_Key: string;
+    DATABASE_URL: string;
+    VITE_CLERK_PUBLISHABLE_KEY: string;
+  }
+}
