@@ -19,5 +19,5 @@ const AuthCallback: React.FC = () => {
             <p>Completing Sign in</p>
         </div>
     )
-}
+};
 export default AuthCallback

@@ -1,5 +1,5 @@
 import React from 'react'
-import { useAuth } from './AuthContext'
+import { useAuth } from '../auth/AuthContext'
 import '../styling/Login.css'
 const Login: React.FC = () => {
 
@@ -12,7 +12,7 @@ const Login: React.FC = () => {
             console.error('Error siginign in', error)
             alert('Failed to sign in with Google')
         }
-    }
+    };
     return (
         <div style={{
             display: 'flex',
@@ -51,5 +51,5 @@ const Login: React.FC = () => {
         
     )
     
-}
+};
 export default Login
