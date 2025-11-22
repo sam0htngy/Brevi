@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate} from 'react-router-dom'
-import { AuthProvider,useAuth } from './AuthContext'
+import { AuthProvider,useAuth } from '../auth/AuthContext'
 import Login from './Login'
 import AuthCallback from '../auth/AuthCallback'
 import '../styling/App.css'
@@ -33,7 +33,7 @@ const Home: React.FC = () => {
         </header>
     </div>
     )
-}
+};
 
 const MainPage: React.FC = () => {
     return(
@@ -47,5 +47,5 @@ const MainPage: React.FC = () => {
             </AuthProvider>
         </Router>
     )
-}
+};
 export default MainPage
