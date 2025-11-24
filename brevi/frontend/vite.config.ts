@@ -13,5 +13,6 @@ declare namespace NodeJS{
     API_Key: string;
     DATABASE_URL: string;
     VITE_CLERK_PUBLISHABLE_KEY: string;
+    REACT_APP_SUPABASE_URL: string;
   }
 }
