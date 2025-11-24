@@ -4,7 +4,7 @@ export default function App() {
   return (
     <header>
       <SignedOut>
-        <SignInButton />
+        <SignInButton forceRedirectUrl="/upload" />
       </SignedOut>
       <SignedIn>
         <UserButton />
