@@ -1,11 +1,14 @@
 import { useState, type ChangeEvent } from "react"
 import '../tailwind.css'
-import axios from "axios"
-
+import { createClient } from "@supabase/supabase-js";
+import {useAuth} from "@clerk/clerk-react"
 
 type UploadStatus = "idle" | "uploading" | "success!" | "error";
-
 export default function FileUploader() {
+  const supabase = createClient(
+    'https://wnxibecjjtujiidzlftx.supabase.co',
+    'PUBLIC_ANON_KEY'
+  )
   const [file, setFile] = useState<File | null>(null)
   const [status, setStatus] = useState<UploadStatus>("idle")
   
@@ -18,25 +21,9 @@ export default function FileUploader() {
   }
 
   async function handlefileUpload() {
-      if (!file) return;
-
-      setStatus('uploading')
-
-      const formData = new FormData()
-      formData.append('file',file)
-
-      try{
-        await axios.post('https://wnxibecjjtujiidzlftx.supabase.co', formData,{ //Hook up to backend through supabase or google cloud
-          headers: {
-            'Content-Type': 'storage/v1/object/list/videos' //connection 
-          },
-        })
-
-        setStatus('success!')
-      } catch {
-        setStatus('error')
-      }
-    }
+ 
+}
+    
 
   return(
     <div>
