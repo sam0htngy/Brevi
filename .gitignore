@@ -1,2 +1,9 @@
-brevi/frontend/.env
+brevi/.env
 CLAUDE.md
+
+
+#ignoring python bytecode:
+__pycache__/
+*.py[cod]
+*.pyo
+

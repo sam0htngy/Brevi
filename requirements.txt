@@ -6,3 +6,4 @@ supabase
 python-multipart
 python-dotenv
 pyjwt[crypto]
+jwt
