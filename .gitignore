@@ -6,6 +6,4 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 *.pyo
-
-brevi/.env
-brevi/frontend/.env
+.env
