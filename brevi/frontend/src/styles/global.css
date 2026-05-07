@@ -10,10 +10,13 @@
 body{
     background: var(--background);
     color: var(--foreground);
-    cursor: none;
     overflow-x: hidden;
 }
 
 .mask-layer{
-    will-change: mask-image, -webkit-mask-image;
+    will-change: auto;
+}
+
+*{
+    cursor: none;
 }
