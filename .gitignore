@@ -1,4 +1,8 @@
-brevi/.env
+# Local secrets and environment overrides (including example files).
+.env
+.env.*
+*.env
+*.env.*
 CLAUDE.md
 
 
@@ -6,4 +10,3 @@ CLAUDE.md
 __pycache__/
 *.py[cod]
 *.pyo
-
