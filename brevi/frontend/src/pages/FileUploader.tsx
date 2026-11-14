@@ -1,34 +1,230 @@
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth, SignInButton } from "@clerk/clerk-react";
+import { useEffect, useState } from "react";
 import * as tus from "tus-js-client";
-import { useState, type ChangeEvent } from "react";
+import { describeVideo } from "../video-file";
 
-type UploadStatus = "idle" | "uploading" | "success" | "error";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-type UploadReservation = { asset_id: string; object_path: string; bucket_id: string; upload_token: string };
+
+type Attempt = Awaited<ReturnType<typeof describeVideo>> & { attempt_id: string; title: string };
+type Reservation = { asset_id: string; status: string; object_path?: string; bucket_id?: string; upload_token?: string };
+type Asset = { id: string; asset_type: "original" | "export"; status: string; retryable: boolean; error_message: string | null };
+type Project = { id: string; title: string; video_assets: Asset[]; upload_attempt_id: string | null };
+
+function transfer(file: File, reservation: Reservation, onProgress: (percent: number) => void) {
+  const { upload_token, bucket_id, object_path } = reservation;
+  if (!SUPABASE_URL || !upload_token || !bucket_id || !object_path) {
+    throw new Error("Video Storage is unavailable.");
+  }
+  const endpoint = `${SUPABASE_URL.replace(/\/$/, "").replace(".supabase.co", ".storage.supabase.co")}/storage/v1/upload/resumable`;
+  return new Promise<void>((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint,
+      fingerprint: async () => `brevi:${endpoint}:${reservation.asset_id}`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024,
+      headers: { "x-signature": upload_token, "x-upsert": "false" },
+      metadata: { bucketName: bucket_id, objectName: object_path, contentType: "video/mp4" },
+      onProgress: (sent, total) => onProgress(Math.round(sent / total * 100)),
+      onError: reject,
+      onSuccess: () => resolve(),
+    });
+    upload.findPreviousUploads().then(([previous]) => {
+      if (previous) upload.resumeFromPreviousUpload(previous);
+      upload.start();
+    }).catch(reject);
+  });
+}
 
 export default function FileUploader() {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  if (!isLoaded) return <p>Loading…</p>;
+  if (!isSignedIn) return <SignInButton forceRedirectUrl="/upload" />;
+  return <VideoLibrary key={userId} userId={userId} />;
+}
+
+class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function VideoLibrary({ userId }: { userId: string }) {
   const { getToken } = useAuth();
-  const [file, setFile] = useState<File | null>(null), [title, setTitle] = useState(""), [status, setStatus] = useState<UploadStatus>("idle"), [progress, setProgress] = useState(0), [error, setError] = useState("");
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) { setFile(event.target.files?.[0] ?? null); setStatus("idle"); }
-  async function api(path: string, options: RequestInit = {}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [title, setTitle] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState("");
+  const [libraryError, setLibraryError] = useState("");
+  const [playback, setPlayback] = useState<{ project: string; url: string } | null>(null);
+  const [resumeProject, setResumeProject] = useState<Project | null>(null);
+  const [fileInputVersion, setFileInputVersion] = useState(0);
+
+  async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
     const token = await getToken();
-    const response = await fetch(`${API_URL}${path}`, { ...options, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...options.headers } });
-    if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail ?? "Request failed");
-    return response.status === 204 ? null : response.json();
+    if (!token) throw new Error("Sign in to access your videos.");
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new ApiError(response.status, typeof body?.detail === "string" ? body.detail : "Request failed.");
+    }
+    return response.status === 204 ? undefined as T : response.json();
   }
-  async function handleFileUpload() {
-    if (!file || !title.trim() || !SUPABASE_URL) return;
-    setStatus("uploading"); setProgress(0); setError("");
+
+  async function refresh() {
+    setProjects(await api<Project[]>("/projects"));
+    setLibraryError("");
+  }
+
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const token = await getToken();
+        if (!token) throw new Error("Sign in to access your videos.");
+        const response = await fetch(`${API_URL}/projects`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!response.ok) throw new Error("Could not load your video library.");
+        const items: Project[] = await response.json();
+        if (active) {
+          setProjects(items);
+          setLibraryError("");
+        }
+      } catch {
+        if (active) setLibraryError("Could not load your video library. Retrying…");
+      }
+      if (active) timer = setTimeout(poll, 4000);
+    }
+    void poll();
+    return () => { active = false; clearTimeout(timer); };
+  }, [getToken]);
+
+  async function uploadVideo() {
+    if (progress !== null || !file || !(resumeProject?.title ?? title.trim())) return;
+    setProgress(0);
+    setError("");
+    let storageKey: string | undefined;
     try {
-      const reservation = await api("/projects/uploads", { method: "POST", body: JSON.stringify({ title: title.trim(), filename: file.name, mime_type: file.type, byte_size: file.size }) }) as UploadReservation;
-      const endpoint = `${SUPABASE_URL.replace(/\/$/, "").replace(".supabase.co", ".storage.supabase.co")}/storage/v1/upload/resumable`;
-      await new Promise<void>((resolve, reject) => {
-        const upload = new tus.Upload(file, { endpoint, retryDelays: [0, 3000, 5000, 10000, 20000], uploadDataDuringCreation: true, removeFingerprintOnSuccess: true, chunkSize: 6 * 1024 * 1024, headers: { "x-signature": reservation.upload_token, "x-upsert": "false" }, metadata: { bucketName: reservation.bucket_id, objectName: reservation.object_path, contentType: file.type }, onProgress: (sent, total) => setProgress(Math.round((sent / total) * 100)), onError: reject, onSuccess: () => resolve() });
-        upload.findPreviousUploads().then((previous) => { if (previous[0]) upload.resumeFromPreviousUpload(previous[0]); upload.start(); }).catch(reject);
-      });
-      await api(`/video-assets/${reservation.asset_id}/complete`, { method: "POST" }); setStatus("success");
-    } catch { setError("Upload failed. Please try again."); setStatus("error"); }
+      const video = await describeVideo(file);
+      const attemptTitle = resumeProject?.title ?? title.trim();
+      let attempt: Attempt | undefined;
+      if (resumeProject) {
+        const saved = await api<Attempt>(`/projects/${resumeProject.id}/upload-attempt`);
+        if (saved.sha256 !== video.sha256 || saved.byte_size !== video.byte_size) {
+          throw new Error("Reselect the same MP4 to resume this upload.");
+        }
+        attempt = saved;
+      }
+      storageKey = `brevi:upload:${userId}:${JSON.stringify([attemptTitle, video.filename, video.sha256])}`;
+      attempt ??= { ...video, title: attemptTitle, attempt_id: localStorage.getItem(storageKey) ?? crypto.randomUUID() };
+      localStorage.setItem(storageKey, attempt.attempt_id);
+      const reserve = () => api<Reservation>("/projects/uploads", { method: "POST", body: JSON.stringify(attempt) });
+      const reservation = await reserve();
+      if (reservation.status !== "ready") {
+        try {
+          await transfer(file, reservation, setProgress);
+        } catch (transferError) {
+          if ((await reserve()).status !== "ready") throw transferError;
+        }
+        await api(`/video-assets/${reservation.asset_id}/complete`, { method: "POST" });
+      }
+      localStorage.removeItem(storageKey);
+      setFile(null);
+      setFileInputVersion((version) => version + 1);
+      setTitle("");
+      setResumeProject(null);
+      await refresh();
+    } catch (failure) {
+      if (storageKey && failure instanceof ApiError && failure.status === 410) {
+        localStorage.removeItem(storageKey);
+        setResumeProject(null);
+      }
+      setError(failure instanceof Error ? failure.message : "Upload failed.");
+    } finally {
+      setProgress(null);
+    }
   }
-  return <main className="flex min-h-screen items-center justify-center bg-gray-100"><section className="w-96 rounded bg-white p-6 shadow"><h1 className="mb-4 text-xl font-semibold">Upload a video</h1><input className="mb-3 w-full" value={title} placeholder="Project title" onChange={(event) => setTitle(event.target.value)} /><input className="mb-3 w-full" type="file" accept="video/mp4,video/quicktime,video/webm,video/x-matroska" onChange={handleFileChange} /><button disabled={!file || !title.trim() || status === "uploading"} onClick={handleFileUpload}>Upload</button>{status === "uploading" && <p className="mt-3">Uploading: {progress}%</p>}{status === "success" && <p className="mt-3">Upload complete. Your edit is queued.</p>}{status === "error" && <p className="mt-3 text-red-700">{error}</p>}</section></main>;
+
+  async function libraryAction(action: () => Promise<void>) {
+    setError("");
+    try {
+      await action();
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Request failed.");
+    }
+  }
+
+  return (
+    <main className="mx-auto max-w-2xl p-6">
+      <h1>Video library</h1>
+      <form onSubmit={(event) => { event.preventDefault(); void uploadVideo(); }}>
+        <h2>{resumeProject ? `Resume ${resumeProject.title}` : "Upload a video"}</h2>
+        {!resumeProject && <label>Project title <input value={title} maxLength={200} onChange={(event) => setTitle(event.target.value)} /></label>}
+        <label>MP4 file (up to 25 MiB) <input key={fileInputVersion} type="file" accept=".mp4,video/mp4" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+        <button disabled={!file || (!resumeProject && !title.trim()) || progress !== null}>
+          {resumeProject ? "Resume upload" : "Upload"}
+        </button>
+        {resumeProject && <button type="button" disabled={progress !== null} onClick={() => setResumeProject(null)}>Cancel resume</button>}
+        {progress !== null && <p role="status">Uploading: {progress}%</p>}
+      </form>
+      {error && <p role="alert">{error}</p>}
+      {libraryError && <p role="status">{libraryError}</p>}
+      <ul>
+        {projects.map((project) => {
+          const original = project.video_assets.find((asset) => asset.asset_type === "original");
+          const exports = project.video_assets.filter((asset) => asset.asset_type === "export");
+          return (
+            <li key={project.id}>
+              <h2>{project.title}</h2>
+              {original?.status === "pending_upload" && (
+                <>
+                  <p>Upload incomplete</p>
+                  {project.upload_attempt_id && <button disabled={progress !== null} onClick={() => setResumeProject(project)}>Resume</button>}
+                </>
+              )}
+              {original?.status === "deleted" && <p>Upload expired. Start a new upload.</p>}
+              {original?.status === "ready" && <p>Original uploaded</p>}
+              {exports.map((asset) => (
+                <div key={asset.id}>
+                  <p>Export: {asset.status}</p>
+                  {asset.error_message && <p>{asset.error_message}</p>}
+                  {asset.status === "failed" && asset.retryable && (
+                    <button onClick={() => void libraryAction(async () => {
+                      await api(`/video-assets/${asset.id}/retry`, { method: "POST" });
+                      await refresh();
+                    })}>Retry render</button>
+                  )}
+                  {asset.status === "ready" && (
+                    <button onClick={() => void libraryAction(async () => {
+                      const { url } = await api<{ url: string }>(`/video-assets/${asset.id}/playback-url`);
+                      setPlayback({ project: project.id, url });
+                    })}>Play export</button>
+                  )}
+                </div>
+              ))}
+              {playback?.project === project.id && <video key={playback.url} src={playback.url} controls autoPlay />}
+              <button onClick={() => {
+                if (!window.confirm(`Delete “${project.title}” and its videos?`)) return;
+                void libraryAction(async () => {
+                  await api(`/projects/${project.id}`, { method: "DELETE" });
+                  if (resumeProject?.id === project.id) setResumeProject(null);
+                  if (playback?.project === project.id) setPlayback(null);
+                  await refresh();
+                });
+              }}>{original?.status === "pending_upload" ? "Discard upload" : "Delete project"}</button>
+            </li>
+          );
+        })}
+      </ul>
+    </main>
+  );
 }
